@@ -1,0 +1,8 @@
+settings_version = 3
+artist_sort = "runtime_rev"
+album_sizing = "pixel"
+album_pixel_size = 225.0
+albums_per_row = 6
+previous_threshold = 3
+auto_save = 30
+pixels_per_point = 2

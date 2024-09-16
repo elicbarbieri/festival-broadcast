@@ -7,7 +7,7 @@ use crate::constants::{
 use crate::data::Gui;
 use crate::data::{AlbumSizing, StateRestore};
 use benri::{log::*, sync::*};
-use disk::{Bincode2, Json};
+use disk::{Bincode2, Json, Toml};
 use log::{error, info, warn};
 use shukusai::{
     audio::Volume,
@@ -26,12 +26,13 @@ use std::sync::Arc;
 //
 // A `Collection` that is being saved to disk is not
 // respected here, although at least `GUI` state is saved.
+// TODO: handle this...
 //#[cfg(target_os = "macos")]
-impl Drop for Gui {
-    fn drop(&mut self) {
-        eframe::App::on_close_event(self);
-    }
-}
+// impl Drop for Gui {
+//     fn drop(&mut self) {
+//         eframe::App::on_close_event(self);
+//     }
+// }
 
 //---------------------------------------------------------------------------------------------------- GUI convenience functions.
 impl Gui {

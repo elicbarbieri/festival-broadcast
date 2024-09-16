@@ -1,12 +1,13 @@
+use std::default;
 //---------------------------------------------------------------------------------------------------- Use
 use crate::constants::{
     APP_HEIGHT_DEFAULT, APP_HEIGHT_MIN, APP_WIDTH_DEFAULT, APP_WIDTH_MIN, FONT_ARRAY,
     RUNTIME_WIDTH, SETTINGS_VERSION, SPACING, STATE_VERSION, VISUALS,
 };
-use crate::data::{DebugInfo, Settings, Settings0, Settings1, Settings2, State, State0};
+use crate::data::{DebugInfo, Settings, State, State0};
 use benri::{atomic_store, now, send};
 use crossbeam::channel::{Receiver, Sender};
-use disk::{Bincode2, Json};
+use disk::{Bincode2, Json, Toml};
 use egui::{FontData, FontDefinitions, FontFamily, FontId, Style, TextStyle};
 use log::{debug, info, warn};
 use shukusai::{
@@ -24,7 +25,7 @@ use std::sync::{atomic::AtomicBool, Arc, Mutex};
 // See `Gui::init` at the bottom to see the function that "starts" the `GUI`.
 impl crate::data::Gui {
     #[inline(always)]
-    fn init_style() -> egui::Style {
+    fn init_style() -> Style {
         Style {
             text_styles: [
                 (TextStyle::Small, FontId::new(10.0, FontFamily::Monospace)),
@@ -81,7 +82,7 @@ impl crate::data::Gui {
     }
 
     #[inline(always)]
-    fn init_fonts() -> egui::FontDefinitions {
+    fn init_fonts() -> FontDefinitions {
         let mut fonts = FontDefinitions::default();
 
         for (i, (font, bytes)) in FONT_ARRAY.iter().enumerate() {
@@ -112,38 +113,48 @@ impl crate::data::Gui {
         // SAFETY: This image is known at compile-time. It should never fail.
         let icon = image::load_from_memory(FESTIVAL_ICON).unwrap().to_rgba8();
         let (width, height) = icon.dimensions();
-        let icon_data = Some(eframe::IconData {
+        let icon_data = egui::viewport::IconData {
             rgba: icon.into_raw(),
             width,
             height,
-        });
+        };
 
         // The rest
         eframe::NativeOptions {
-            min_window_size: Some(egui::vec2(APP_WIDTH_MIN, APP_HEIGHT_MIN)),
-            initial_window_size: Some(egui::vec2(APP_WIDTH_DEFAULT, APP_HEIGHT_DEFAULT)),
-            follow_system_theme: false,
-            default_theme: eframe::Theme::Dark,
-            drag_and_drop_support: true,
-            // FIXME:
-            // `eframe::Renderer::Wgpu` causes colors to
-            // be over-saturated on `KDE`. For now, use
-            // `Glow` on Linux (even though `Wgpu` works
-            // fine on GNOME).
-            //
-            // Not changing Windows/macOS off `Wgpu` since it works.
-            //
-            // https://github.com/hinto-janai/festival/pull/32
-            // https://github.com/hinto-janai/festival/pull/33
-            // https://github.com/hinto-janai/festival/pull/42
-            #[cfg(target_os = "linux")]
-            renderer: eframe::Renderer::Glow,
-            #[cfg(not(target_os = "linux"))]
-            renderer: eframe::Renderer::Wgpu,
-            app_id: Some(FESTIVAL_DBUS.to_string()),
-            icon_data,
+            // viewport: egui::ViewportBuilder::default()
+            //     .with_title("Festival")
+            //     .with_icon(icon_data)
+            //     .with_fullscreen(true)
+            //     .with_inner_size(egui::vec2(APP_WIDTH_DEFAULT, APP_HEIGHT_DEFAULT))
+            //     .with_min_inner_size(egui::vec2(APP_WIDTH_MIN, APP_HEIGHT_MIN))
+            //     .with_resizable(true)
+            //     .with_decorations(true)
+            //     .with_app_id(FESTIVAL_DBUS),
             ..Default::default()
         }
+
+        // min_window_size: Some(egui::vec2(APP_WIDTH_MIN, APP_HEIGHT_MIN)),
+        // initial_window_size: Some(egui::vec2(APP_WIDTH_DEFAULT, APP_HEIGHT_DEFAULT)),
+        // follow_system_theme: false,
+        // default_theme: eframe::Theme::Dark,
+        // drag_and_drop_support: true,
+        // // FIXME:
+        // // `eframe::Renderer::Wgpu` causes colors to
+        // // be over-saturated on `KDE`. For now, use
+        // // `Glow` on Linux (even though `Wgpu` works
+        // // fine on GNOME).
+        // //
+        // // Not changing Windows/macOS off `Wgpu` since it works.
+        // //
+        // // https://github.com/hinto-janai/festival/pull/32
+        // // https://github.com/hinto-janai/festival/pull/33
+        // // https://github.com/hinto-janai/festival/pull/42
+        // #[cfg(target_os = "linux")]
+        // renderer: eframe::Renderer::Glow,
+        // #[cfg(not(target_os = "linux"))]
+        // renderer: eframe::Renderer::Wgpu,
+        // app_id: Some(FESTIVAL_DBUS.to_string()),
+        // icon_data,
     }
 
     #[inline(always)]
@@ -154,30 +165,12 @@ impl crate::data::Gui {
         from_kernel: Receiver<KernelToFrontend>,
     ) -> Self {
         // Read `Settings` from disk.
-        let settings = Settings::from_versions(&[
-            (SETTINGS_VERSION, Settings::from_file),
-            (2, Settings2::disk_into),
-            (1, Settings1::disk_into),
-            (0, Settings0::disk_into),
-        ]);
-        let settings = match settings {
-            Ok((v, s)) if v == SETTINGS_VERSION => {
-                info!("GUI Init [1/8] ... Settings{SETTINGS_VERSION} from disk");
-                s
-            }
-            Ok((v, s)) => {
-                info!("GUI Init [1/8] ... Settings{v} from disk, converted to Settings{SETTINGS_VERSION}");
-                s
-            }
-            Err(e) => {
-                warn!("GUI Init [1/8] ... Settings failed from disk: {e}, returning default Settings{SETTINGS_VERSION}");
-                Settings::new()
-            }
-        };
-        debug!("Settings{SETTINGS_VERSION}: {settings:#?}");
+        let settings = Settings::from_file().unwrap_or_else(|e| {
+            warn!("GUI Init [1/8] ... Settings failed from disk: {e}, returning default Settings");
+            Settings::new()
+        });
 
-        cc.egui_ctx
-            .set_pixels_per_point(settings.pixels_per_point as f32);
+        cc.egui_ctx.set_pixels_per_point(settings.pixels_per_point);
         atomic_store!(
             shukusai::audio::PREVIOUS_THRESHOLD,
             settings.previous_threshold

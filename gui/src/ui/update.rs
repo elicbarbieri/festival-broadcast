@@ -27,40 +27,13 @@ use shukusai::{
 };
 use std::sync::Arc;
 use std::time::Instant;
+use eframe::glow::Context;
+use eframe::wgpu::rwh::HasWindowHandle;
 use strum::*;
 
 //---------------------------------------------------------------------------------------------------- `GUI`'s eframe impl.
 impl eframe::App for Gui {
-    //-------------------------------------------------------------------------------- On exit.
-    fn on_close_event(&mut self) -> bool {
-        // If already in the process of exiting, return,
-        // else turn on `GUI`'s signal for exiting.
-        match self.exiting {
-            true => {
-                warn!("GUI - Already in process of exiting, ignoring exit signal");
-                return false;
-            }
-            false => {
-                info!("GUI - Exiting...");
-                self.exiting = true;
-            }
-        };
-
-        // Clone things to send to exit thread.
-        let to_kernel = self.to_kernel.clone();
-        let from_kernel = self.from_kernel.clone();
-        let settings = self.settings.clone();
-        let state = self.state.clone();
-
-        // Spawn `exit` thread.
-        std::thread::spawn(move || Self::exit(to_kernel, from_kernel, state, settings));
-
-        // Set the exit `Instant`.
-        self.exit_instant = Instant::now();
-
-        // Don't exit here.
-        false
-    }
+    //-------------------------------------------------------------------------------- On exit
 
     //-------------------------------------------------------------------------------- Main event loop.
     #[inline(always)]
@@ -71,14 +44,28 @@ impl eframe::App for Gui {
             std::process::exit(0);
         }
 
-        // If `souvlaki` sent an exit signal.
-        if shukusai::state::media_controls_should_exit() {
-            self.on_close_event();
+        if ctx.input(|i| i.viewport().close_requested()) ||
+            shukusai::state::media_controls_should_exit() // If `souvlaki` sent an exit signal.
+        {
+            if self.exiting {
+                warn!("GUI - Already exiting, ignoring close request");
+                // If we're already exiting, do nothing.
+                return;
+            } else {
+                warn!("GUI - Close requested, starting exit thread");
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.exiting = true;
+                self.spawn_exit_thread();
+            }
         }
 
         // If `souvlaki` sent a `Raise` signal.
         if shukusai::state::media_controls_raise() {
-            frame.request_user_attention(egui::output::UserAttentionType::Informational);
+            ctx.send_viewport_cmd(
+                egui::ViewportCommand::RequestUserAttention(
+                    egui::output::UserAttentionType::Informational
+                )
+            );
         }
 
         // Acquire a local copy of the `AUDIO_STATE`.
@@ -171,7 +158,7 @@ impl eframe::App for Gui {
 
 impl Gui {
     #[inline(always)]
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Check for `Kernel` messages.
         // Only if we're not exiting, to prevent stealing
         // the message intended for the exit thread.
@@ -250,18 +237,21 @@ impl Gui {
 
         if self.last_song != self.audio_state.song {
             // Set window title.
+            info!("GUI - Setting window title");
             if let (Some(key), Some(index)) = (self.audio_state.song, self.audio_state.queue_idx) {
                 let (artist, album, song) = self.collection.walk(key);
-                frame.set_window_title(&self.settings.window_title.format(
-                    index + 1,
-                    self.audio_state.queue.len(),
-                    &song.runtime,
-                    &artist.name,
-                    &album.title,
-                    &song.title,
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                    self.settings.window_title.format(
+                        index + 1,
+                        self.audio_state.queue.len(),
+                        &song.runtime,
+                        &artist.name,
+                        &album.title,
+                        &song.title,
+                    ),
                 ));
             } else {
-                frame.set_window_title(FESTIVAL);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(FESTIVAL.to_string()));
             }
 
             // Set bottom UI runtime text width.
@@ -341,7 +331,11 @@ impl Gui {
                     }
                 // Check for `F11` (Fullscreen)
                 } else if input.consume_key(Modifiers::NONE, Key::F11) {
-                    frame.set_fullscreen(!frame.info().window_info.fullscreen);
+                    let is_fullscreen = ctx
+                        .viewport(|i| i.input.viewport().fullscreen)
+                        .unwrap_or(false);
+
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen));
                 // Check for `Ctrl+C` (Reset Collection)
                 } else if input.consume_key(Modifiers::COMMAND, Key::C) {
                     self.reset_collection();
@@ -419,7 +413,7 @@ impl Gui {
                 // Check for `Ctrl+Shift+D` (toggle debug screen)
                 } else if input
                     .modifiers
-                    .matches(Modifiers::COMMAND.plus(Modifiers::SHIFT))
+                    .matches_exact(Modifiers::COMMAND.plus(Modifiers::SHIFT))
                     && input.key_pressed(Key::D)
                 {
                     flip!(self.debug_screen);
@@ -705,14 +699,13 @@ impl Gui {
                             &mut self.audio_seek,
                             0..=self.audio_state.runtime.inner() as u64,
                         )
-                        .smallest_positive(1.0)
-                        .show_value(false)
-                        .thickness(h * 2.0)
-                        .circle_size(h),
+                            .handle_shape(egui::style::HandleShape::Circle)
+                            .smallest_positive(1.0)
+                            .show_value(false)
                     );
 
                     // Only send signal if the slider was dragged + released.
-                    if resp.drag_released() {
+                    if resp.drag_stopped() {
                         // If we dragged to the very last second, just skip.
                         if self.audio_seek == self.audio_state.runtime.inner() as u64 {
                             debug!("GUI - Seeked to last second, sending Next");
@@ -797,8 +790,7 @@ impl Gui {
                             .smallest_positive(1.0)
                             .show_value(false)
                             .vertical()
-                            .thickness(unit * 2.0)
-                            .circle_size(unit),
+                            .handle_shape(egui::style::HandleShape::Circle)
                     );
 
                     // Send signal if the slider was/is being dragged.
@@ -820,10 +812,10 @@ impl Gui {
                     } else if resp.hovered() {
                         ctx.input_mut(|input| {
                             for event in input.events.iter() {
-                                if let egui::Event::Scroll(vec2) = event {
-                                    if vec2.y.is_sign_positive() {
+                                if let egui::Event::MouseWheel {unit, delta,modifiers} = event {
+                                    if delta.x.is_sign_positive() {
                                         self.add_volume(1);
-                                    } else if vec2.y.is_sign_negative() {
+                                    } else if delta.y.is_sign_negative() {
                                         self.sub_volume(1);
                                     }
                                     break;

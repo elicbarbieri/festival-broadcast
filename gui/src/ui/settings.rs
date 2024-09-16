@@ -184,6 +184,32 @@ impl crate::data::Gui {
                 ui.separator();
                 ui.add_space(40.0);
 
+                //-------------------------------------------------- Device Selection
+                // let label = Label::new(
+                //     RichText::new("Audio Output Device")
+                //         .color(BONE)
+                //         .text_style(TextStyle::Heading),
+                // );
+                //
+                // ui.add_sized([width, text], label);
+                //
+                // // FIXME:
+                // // Trying to center `ComboBox` uncovers all sorts
+                // // of `egui` bugs, so instead, just make it max width.
+                // ui.spacing_mut().combo_width = width - 15.0;
+                // ui.spacing_mut().icon_width = height / 15.0;
+                //
+                // ComboBox::from_id_source("settings_audio_device")
+                //     .selected_text(RichText::new(&self.settings.audio_device).color(BONE))
+                //     .show_ui(ui, |ui| {
+                //         for i in 0..self.devices.len() {
+                //             ui.selectable_value(&mut self.settings.audio_device, i, &self.devices[i]);
+                //         }
+                //     });
+                //
+                // ui.add_space(40.0);
+                // ui.separator();
+                // ui.add_space(40.0);
                 //-------------------------------------------------- Artist Sort Order.
                 // Heading.
                 let label = Label::new(
@@ -193,12 +219,6 @@ impl crate::data::Gui {
                 );
                 ui.add_sized([width, text], label)
                     .on_hover_text(ARTIST_SORT_ORDER);
-
-                // FIXME:
-                // Trying to center `ComboBox` uncovers all sorts
-                // of `egui` bugs, so instead, just make it max width.
-                ui.spacing_mut().combo_width = width - 15.0;
-                ui.spacing_mut().icon_width = height / 15.0;
 
                 // ComboBox.
                 ui.add_space(10.0);
@@ -391,7 +411,6 @@ impl crate::data::Gui {
                     }
                     let slider = slider
                         .step_by(1.0)
-                        .thickness(text)
                         .fixed_decimals(0)
                         .show_value(false)
                         .trailing_fill(false);
@@ -429,7 +448,6 @@ impl crate::data::Gui {
                     );
                     let slider = slider
                         .step_by(1.0)
-                        .thickness(text)
                         .show_value(false)
                         .trailing_fill(false);
                     ui.add_sized([width, text], slider);
@@ -464,7 +482,6 @@ impl crate::data::Gui {
                     let slider = Slider::new(&mut self.settings.auto_save, 0..=u8::MAX);
                     let slider = slider
                         .step_by(1.0)
-                        .thickness(text)
                         .show_value(false)
                         .trailing_fill(false);
                     ui.add_sized([width, text], slider);

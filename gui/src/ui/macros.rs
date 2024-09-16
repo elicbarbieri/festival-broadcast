@@ -833,9 +833,9 @@ macro_rules! no_rounding {
     ($ui:ident) => {{
         // Reduce rounding corners.
         let widgets = &mut $ui.visuals_mut().widgets;
-        widgets.hovered.rounding = egui::Rounding::none();
-        widgets.inactive.rounding = egui::Rounding::none();
-        widgets.active.rounding = egui::Rounding::none();
+        widgets.hovered.rounding = egui::Rounding::default();
+        widgets.inactive.rounding = egui::Rounding::default();
+        widgets.active.rounding = egui::Rounding::default();
         // Reduced padding.
         $ui.spacing_mut().button_padding.x -= 2.0;
     }};

@@ -8,12 +8,6 @@ pub use state0::*;
 
 mod settings;
 pub use settings::*;
-mod settings0;
-pub use settings0::*;
-mod settings1;
-pub use settings1::*;
-mod settings2;
-pub use settings2::*;
 
 mod gui;
 pub use gui::*;

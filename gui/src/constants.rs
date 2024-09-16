@@ -1,11 +1,10 @@
 //---------------------------------------------------------------------------------------------------- Use.
 use egui::epaint::{Rounding, Shadow, Stroke};
-
-use egui::{style::Spacing, Color32, Visuals};
+use egui::{vec2, style::Spacing, Color32, Visuals};
 
 pub use const_format::assertcp as const_assert;
 pub use const_format::formatcp as const_format;
-use egui::style::{ScrollStyle, Selection, WidgetVisuals, Widgets};
+use egui::style::{ScrollStyle, Selection, TextCursorStyle, WidgetVisuals, Widgets};
 use once_cell::sync::Lazy;
 
 //---------------------------------------------------------------------------------------------------- Version.
@@ -96,23 +95,35 @@ pub static VISUALS: Lazy<Visuals> = Lazy::new(|| {
         warn_fg_color: Color32::from_rgb(255, 143, 0), // orange
         error_fg_color: Color32::from_rgb(255, 0, 0), // red
         window_rounding: Rounding::same(6.0),
-        window_shadow: Shadow::big_dark(),
+        window_shadow: Shadow {
+            offset: vec2(1.0, 2.0),
+            blur: 3.0,
+            spread: 0.0,
+            color: Color32::from_black_alpha(64)
+        },
         window_fill: BG,
         window_stroke: Stroke::new(1.0, Color32::from_gray(60)),
+        window_highlight_topmost: true,
         menu_rounding: Rounding::same(6.0),
         panel_fill: BG,
-        popup_shadow: Shadow::small_dark(),
+        popup_shadow: Shadow {
+            offset: vec2(1.0, 2.0),
+            blur: 3.0,
+            spread: 0.0,
+            color: Color32::from_black_alpha(64)
+        },
         resize_corner_size: 12.0,
-        text_cursor: Stroke::new(2.0, Color32::from_rgb(192, 222, 255)),
-        text_cursor_preview: false,
+        text_cursor: TextCursorStyle::default(),
         clip_rect_margin: 3.0, // should be at least half the size of the widest frame stroke + max WidgetVisuals::expansion
         button_frame: true,
         collapsing_header_frame: false,
         indent_has_left_vline: true,
         striped: false,
         slider_trailing_fill: true,
+        handle_shape: egui::style::HandleShape::Circle,
         interact_cursor: None,
         image_loading_spinners: true,
+        numeric_color_space: egui::style::NumericColorSpace::GammaByte,
     }
 });
 

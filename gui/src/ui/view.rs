@@ -50,7 +50,7 @@ impl crate::data::Gui {
             let size = Vec2::new(size, size);
             ui.set_max_size(size);
             Frame::window(&ctx.style())
-                .rounding(Rounding::none())
+                .rounding(Rounding::default())
                 .inner_margin(1.0)
                 .show(ui, |ui| {
                     album.art_or().show_size(ui, size);
@@ -175,9 +175,9 @@ impl crate::data::Gui {
                         {
                             // Reduce rounding corners.
                             let widgets = &mut ui.visuals_mut().widgets;
-                            widgets.hovered.rounding = egui::Rounding::none();
-                            widgets.inactive.rounding = egui::Rounding::none();
-                            widgets.active.rounding = egui::Rounding::none();
+                            widgets.hovered.rounding = Rounding::default();
+                            widgets.inactive.rounding = Rounding::default();
+                            widgets.active.rounding = Rounding::default();
                             // Reduced padding.
                             ui.spacing_mut().button_padding.x -= 2.0;
                         }

@@ -24,12 +24,11 @@ benri    = { workspace = true }
 disk     = { workspace = true }
 readable = { workspace = true }
 
-### External patched libraries `external/`.
-egui        = { version = "0.23.0", path = "../external/egui/crates/egui",        features = ["default_fonts", "serde"], default-features = false }
-eframe      = { version = "0.23.0", path = "../external/egui/crates/eframe",      features = ["glow", "wgpu"],           default-features = false }
-egui_extras = { version = "0.23.0", path = "../external/egui/crates/egui_extras", features = ["image"],                  default-features = false }
-epaint      = { version = "0.23.0", path = "../external/egui/crates/epaint" }
-egui-notify = { version = "0.7.0",  path = "../external/egui-notify" }
+egui = { version = "0.28.1", features = ["default_fonts", "serde"] }
+eframe = { version = "0.28.1", features = ["glow", "wgpu"] }
+egui_extras = { version = "0.28.1", features = ["image"] }
+epaint = "0.28.1"
+egui-notify = "0.15.0"
 
 ### Shared.
 anyhow       = { workspace = true }
@@ -49,6 +48,7 @@ zip          = { workspace = true }
 
 ### Regular libraries.
 rfd  = "0.11.4"
+toml = "0.8.19"
 
 # For Windows build (icon)
 [target.'cfg(windows)'.build-dependencies]

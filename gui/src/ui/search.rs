@@ -7,6 +7,7 @@ use crate::text::{
 use benri::send;
 use egui::{CentralPanel, Label, RichText, ScrollArea, SelectableLabel, Sense, TextEdit};
 use egui_extras::{Column, TableBuilder};
+use egui::text::{CCursor, CCursorRange};
 use log::debug;
 use log::warn;
 use readable::Unsigned;
@@ -51,15 +52,14 @@ impl crate::data::Gui {
                     // This forces the text cursor to move forward 1 character.
                     if let Some(mut state) = egui::widgets::text_edit::TextEditState::load(ctx, id)
                     {
-                        let cursor = egui::widgets::text_edit::CCursorRange {
-                            primary: epaint::text::cursor::CCursor {
+                        let cursor = CCursorRange {
+                            primary: CCursor {
                                 index: 1,
                                 ..Default::default()
                             },
                             ..Default::default()
                         };
-
-                        state.set_ccursor_range(Some(cursor));
+                        state.cursor.set_char_range(Some(cursor));
                     }
 
                     ctx.memory_mut(|m| m.request_focus(id));

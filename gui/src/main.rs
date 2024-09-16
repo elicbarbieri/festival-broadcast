@@ -43,7 +43,7 @@ fn main() {
                 };
 
             // Start `GUI`.
-            Box::new(crate::data::Gui::init(cc, to_kernel, from_kernel))
+            Ok(Box::new(crate::data::Gui::init(cc, to_kernel, from_kernel)))
         }),
     ) {
         panic!("eframe::run_native() failed: {e}");
