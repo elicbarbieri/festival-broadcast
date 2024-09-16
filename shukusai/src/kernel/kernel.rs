@@ -558,22 +558,21 @@ impl Kernel {
             self.from_audio.clone(),
             self.from_watch.clone(),
         );
-        let (frontend, search, audio, watch) = (
-            select.recv(&frontend),
-            select.recv(&search),
-            select.recv(&audio),
-            select.recv(&watch),
-        );
+
+        assert_eq!(0, select.recv(&frontend));
+        assert_eq!(1, select.recv(&search));
+        assert_eq!(2, select.recv(&audio));
+        assert_eq!(3, select.recv(&watch));
 
         // 1) Hang until message is ready.
         // 2) Receive the message and pass to appropriate function.
         // 3) Loop.
         loop {
             match select.ready() {
-                i if i == frontend => self.msg_frontend(recv!(self.from_frontend)),
-                i if i == search => self.msg_search(recv!(self.from_search)),
-                i if i == audio => self.msg_audio(recv!(self.from_audio)),
-                i if i == watch => self.msg_watch(recv!(self.from_watch)),
+                0 => self.recv_from_frontend(recv!(self.from_frontend)),
+                1 => self.recv_from_search(recv!(self.from_search)),
+                2 => self.recv_from_audio(recv!(self.from_audio)),
+                3 => self.recv_from_watch(recv!(self.from_watch)),
                 _ => {
                     error!("Kernel - Received an unknown message");
                     debug_panic!("Kernel - Received an unknown message");
@@ -585,7 +584,7 @@ impl Kernel {
     //-------------------------------------------------- Message handling.
     #[inline(always)]
     // We got a message from `GUI`.
-    fn msg_frontend(&mut self, msg: FrontendToKernel) {
+    fn recv_from_frontend(&mut self, msg: FrontendToKernel) {
         use crate::kernel::FrontendToKernel::*;
         match msg {
             // Audio playback.
@@ -629,7 +628,7 @@ impl Kernel {
 
     #[inline(always)]
     // We got a message from `Search`.
-    fn msg_search(&self, msg: SearchToKernel) {
+    fn recv_from_search(&self, msg: SearchToKernel) {
         use crate::search::SearchToKernel::*;
         match msg {
             Resp(keychain) => send!(self.to_frontend, KernelToFrontend::SearchResp(keychain)),
@@ -638,7 +637,7 @@ impl Kernel {
 
     #[inline(always)]
     // We got a message from `Audio`.
-    fn msg_audio(&self, msg: AudioToKernel) {
+    fn recv_from_audio(&self, msg: AudioToKernel) {
         use crate::audio::AudioToKernel::*;
         match msg {
             DeviceError(string) => send!(
@@ -662,7 +661,7 @@ impl Kernel {
 
     #[inline(always)]
     // We got a message from `Watch`.
-    fn msg_watch(&self, msg: WatchToKernel) {
+    fn recv_from_watch(&self, msg: WatchToKernel) {
         use crate::audio::{Repeat, Seek};
         use crate::watch::WatchToKernel::*;
         match msg {

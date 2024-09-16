@@ -1,12 +1,12 @@
-[submodule "external/egui"]
-	path = external/egui
-	url = https://github.com/hinto-janai/egui.git
-[submodule "external/egui-notify"]
-	path = external/egui-notify
-	url = https://github.com/hinto-janai/egui-notify
+; [submodule "external/egui"]
+; 	path = external/egui
+; 	url = https://github.com/hinto-janai/egui.git
+; [submodule "external/egui-notify"]
+; 	path = external/egui-notify
+; 	url = https://github.com/hinto-janai/egui-notify
 [submodule "external/Symphonia"]
 	path = external/Symphonia
 	url = https://github.com/hinto-janai/Symphonia
-[submodule "external/json-rpc"]
-	path = external/json-rpc
-	url = https://github.com/hinto-janai/json-rpc
+; [submodule "external/json-rpc"]
+; 	path = external/json-rpc
+; 	url = https://github.com/hinto-janai/json-rpc

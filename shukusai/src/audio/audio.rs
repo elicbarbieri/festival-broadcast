@@ -1,14 +1,13 @@
 //---------------------------------------------------------------------------------------------------- Use
 use crate::{
     audio::{
-        output::{AudioOutput, Output},
-        Append, AudioToKernel, KernelToAudio, Repeat, Seek, Volume,
+        output::AudioOutput, Append, AudioToKernel, KernelToAudio, Repeat, Seek, Volume,
     },
     collection::{AlbumKey, ArtistKey, Collection, SongKey},
     state::{AudioState, AUDIO_STATE, MEDIA_CONTROLS_RAISE, MEDIA_CONTROLS_SHOULD_EXIT, VOLUME},
 };
 use anyhow::anyhow;
-use benri::{debug_panic, flip, log::*, sleep, sync::*};
+use benri::{debug_panic, flip, log::*, sync::*};
 use crossbeam::channel::{Receiver, Sender};
 use log::{debug, error, trace, warn};
 use std::sync::Arc;
@@ -26,14 +25,12 @@ use symphonia::core::{
     probe::Hint,
     units::{Time, TimeBase},
 };
+use cpal::Device;
 
 #[cfg(feature = "gui")]
 use crate::frontend::gui::gui_request_update;
 
 //---------------------------------------------------------------------------------------------------- Constants
-// If the audio device is not connected, how many seconds
-// should we wait before trying to connect again?
-const RETRY_SECONDS: u64 = 1;
 
 // In the audio packet demux/decode loop, how much time
 // should we spare to listen for `Kernel` messages?
@@ -88,9 +85,10 @@ pub(crate) struct Audio {
 
     // The current song.
     current: Option<AudioReader>,
+
     // The existence of this field means we should
     // be seeking in the next loop iteration.
-    seek: Option<symphonia::core::units::Time>,
+    seek: Option<Time>,
 
     // A local copy of `AUDIO_STATE`.
     // This exists so we don't have to lock
@@ -148,24 +146,15 @@ impl Audio {
         let weak = Arc::downgrade(&collection);
         drop(collection);
 
-        // Loop until we can connect to an audio device.
-        let mut tries = 0_usize;
-        let output = loop {
-            match AudioOutput::dummy() {
-                Ok(o) => {
-                    debug!("Audio Init [1/3] ... dummy output device");
-                    break o;
-                }
-                Err(e) => {
-                    if tries == 5 {
-                        warn!("Audio Init [1/3] ... output device error: {e:?} ... will continue to retry every {RETRY_SECONDS} seconds, but will only log when we succeed");
-                    } else if tries < 5 {
-                        warn!("Audio Init [1/3] ... output device error: {e:?} ... retrying in {RETRY_SECONDS} seconds");
-                    }
-                    tries += 1;
-                }
+        // Loop until we can open the audio output device.
+        // Use default SignalSpec.  If decoded audio is at a different sample rate,
+        // the audio output device will be re-opened with the correct SignalSpec.
+        let output = match AudioOutput::try_open(None, None, symphonia::core::units::Duration::from(50_u64)) {
+            Ok(o) => o,
+            Err(e) => {
+                fail!("Audio Init [1/3] ... Cannot create output device");
+                return;
             }
-            sleep!(RETRY_SECONDS);
         };
 
         // Media Controls.
@@ -238,10 +227,9 @@ impl Audio {
         let mut select = crossbeam::channel::Select::new();
         let kernel = self.from_kernel.clone();
         let mc = self.from_mc.clone();
-        /* [0] */
-        assert_eq!(select.recv(&kernel), 0);
-        /* [1] */
-        assert_eq!(select.recv(&mc), 1);
+
+        assert_eq!(0, select.recv(&kernel));
+        assert_eq!(1, select.recv(&mc));
 
         loop {
             //------ Kernel message.
@@ -360,23 +348,12 @@ impl Audio {
                         let duration = decoded.capacity() as u64;
 
                         if spec != self.output.spec || duration != self.output.duration {
-                            // If the spec/duration is different, we must re-open a
-                            // matching audio output device or audio will get weird.
-                            match AudioOutput::try_open(spec, duration) {
-                                Ok(o) => {
-                                    self.output.flush();
-                                    self.output = o;
-                                }
-
-                                // And if we couldn't, pause playback.
+                            match self.output.reopen_stream(&spec, &duration) {
+                                Ok(_) => self.output.flush(),
                                 Err(e) => {
-                                    //
                                     self.state.playing = false;
                                     AUDIO_STATE.write().playing = false;
-                                    send!(
-                                        self.to_kernel,
-                                        AudioToKernel::DeviceError(e.into_anyhow())
-                                    );
+                                    send!(self.to_kernel, AudioToKernel::DeviceError(e.into_anyhow()));
                                     continue;
                                 }
                             }

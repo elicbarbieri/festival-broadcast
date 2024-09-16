@@ -12,6 +12,7 @@ use readable::Runtime;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard, TryLockError};
+use cpal::Device;
 
 //---------------------------------------------------------------------------------------------------- Lazy
 /// This is the single, global copy of `AudioState` that `Kernel` uses.
@@ -106,6 +107,11 @@ pub struct AudioState {
     /// It does not represent the current volume.
     /// See [`crate::state::VOLUME`] for more info.
     pub volume: Volume,
+
+    //  TODO: Implement AudioOutputDevice struct
+    // /// System audio output device.  If `None`, use the
+    // /// system default device
+    // pub output_device: Option<Device>,
 }
 
 impl AudioState {
