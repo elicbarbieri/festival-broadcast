@@ -24,6 +24,7 @@ use shukusai::{
     sort::{AlbumSort, ArtistSort, SongSort},
 };
 use strum::*;
+use shukusai::audio::AudioOutputDevice;
 
 //---------------------------------------------------------------------------------------------------- Settings
 impl crate::data::Gui {
@@ -184,32 +185,37 @@ impl crate::data::Gui {
                 ui.separator();
                 ui.add_space(40.0);
 
+                ui.spacing_mut().combo_width = width - 15.0;
+                ui.spacing_mut().icon_width = height / 15.0;
+
                 //-------------------------------------------------- Device Selection
-                // let label = Label::new(
-                //     RichText::new("Audio Output Device")
-                //         .color(BONE)
-                //         .text_style(TextStyle::Heading),
-                // );
-                //
-                // ui.add_sized([width, text], label);
-                //
-                // // FIXME:
-                // // Trying to center `ComboBox` uncovers all sorts
-                // // of `egui` bugs, so instead, just make it max width.
-                // ui.spacing_mut().combo_width = width - 15.0;
-                // ui.spacing_mut().icon_width = height / 15.0;
-                //
-                // ComboBox::from_id_source("settings_audio_device")
-                //     .selected_text(RichText::new(&self.settings.audio_device).color(BONE))
-                //     .show_ui(ui, |ui| {
-                //         for i in 0..self.devices.len() {
-                //             ui.selectable_value(&mut self.settings.audio_device, i, &self.devices[i]);
-                //         }
-                //     });
-                //
-                // ui.add_space(40.0);
-                // ui.separator();
-                // ui.add_space(40.0);
+                // FIXME:  Holy crap this is a clusterfuck...
+                // Load the available devices once, and then refresh with a button
+                let label = Label::new(
+                    RichText::new("Audio Output Device")
+                        .color(BONE)
+                        .text_style(TextStyle::Heading),
+                );
+
+                ui.add_sized([width, text], label);
+
+                ComboBox::from_id_source("settings_audio_device")
+                    .selected_text(RichText::new(self.settings.output_device.clone()).color(BONE))
+                    .show_ui(ui, |ui| {
+                        for device in AudioOutputDevice::available_devices() {
+                            if ui.selectable_value(
+                                &mut self.settings.output_device,
+                                device.clone(),
+                                &device
+                            ).changed() {
+                                self.set_audio_output_device(device.clone())
+                            }
+                        }
+                    });
+
+                ui.add_space(40.0);
+                ui.separator();
+                ui.add_space(40.0);
                 //-------------------------------------------------- Artist Sort Order.
                 // Heading.
                 let label = Label::new(

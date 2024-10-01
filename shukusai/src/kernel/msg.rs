@@ -1,6 +1,6 @@
 //---------------------------------------------------------------------------------------------------- Use
 use crate::{
-    audio::{Append, Repeat, Seek, Volume},
+    audio::{Append, Repeat, Seek, Volume, AudioOutputDevice},
     collection::{AlbumKey, ArtistKey, Collection, Keychain, SongKey},
     search::SearchKind,
 };
@@ -128,6 +128,10 @@ pub enum FrontendToKernel {
     /// We just started up, restore the previous audio
     /// state from disk if there is any.
     RestoreAudioState,
+
+    /// Set the output device to use for audio playback.  If None, the
+    /// default device will be used.
+    SetOutputDevice(AudioOutputDevice),
 
     // Collection.
     /// I'd like a new [`Collection`], scanning these [`PathBuf`]'s for audio files.

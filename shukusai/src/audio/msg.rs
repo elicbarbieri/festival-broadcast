@@ -4,6 +4,7 @@ use crate::{
     collection::{AlbumKey, ArtistKey, Collection, SongKey},
 };
 use std::sync::Arc;
+use crate::audio::AudioOutputDevice;
 
 //---------------------------------------------------------------------------------------------------- Kernel Messages.
 pub(crate) enum AudioToKernel {
@@ -43,6 +44,7 @@ pub(crate) enum KernelToAudio {
 
     // Audio State.
     RestoreAudioState,
+    SetOutputDevice(AudioOutputDevice),
 
     // Collection.
     DropCollection,                 // Drop your pointer.

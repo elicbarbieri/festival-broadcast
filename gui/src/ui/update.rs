@@ -790,7 +790,6 @@ impl Gui {
                             .smallest_positive(1.0)
                             .show_value(false)
                             .vertical()
-                            .handle_shape(egui::style::HandleShape::Circle)
                     );
 
                     // Send signal if the slider was/is being dragged.

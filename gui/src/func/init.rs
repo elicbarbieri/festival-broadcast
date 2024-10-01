@@ -17,6 +17,7 @@ use shukusai::{
     state::{AudioState, ResetState},
 };
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use shukusai::audio::AudioOutputDevice;
 
 //---------------------------------------------------------------------------------------------------- GUI Init.
 // Instead of having [Gui::new()] be 1000s of lines long,
@@ -121,15 +122,12 @@ impl crate::data::Gui {
 
         // The rest
         eframe::NativeOptions {
-            // viewport: egui::ViewportBuilder::default()
-            //     .with_title("Festival")
-            //     .with_icon(icon_data)
-            //     .with_fullscreen(true)
-            //     .with_inner_size(egui::vec2(APP_WIDTH_DEFAULT, APP_HEIGHT_DEFAULT))
-            //     .with_min_inner_size(egui::vec2(APP_WIDTH_MIN, APP_HEIGHT_MIN))
-            //     .with_resizable(true)
-            //     .with_decorations(true)
-            //     .with_app_id(FESTIVAL_DBUS),
+            viewport: egui::ViewportBuilder::default()
+                .with_title("Festival")
+                .with_icon(icon_data)
+                .with_inner_size(egui::vec2(APP_WIDTH_DEFAULT, APP_HEIGHT_DEFAULT))
+                .with_min_inner_size(egui::vec2(APP_WIDTH_MIN, APP_HEIGHT_MIN))
+                .with_app_id(FESTIVAL_DBUS),
             ..Default::default()
         }
 
@@ -221,20 +219,25 @@ impl crate::data::Gui {
             info!("GUI Init [3/8] ... Skipping AudioState");
         }
 
+        send!(to_kernel, FrontendToKernel::SetOutputDevice(
+            AudioOutputDevice::from_str(&settings.output_device)
+        ));
+        info!("GUI Init [5/9] ... Setting OutputDevice");
+
         // Style
         cc.egui_ctx.set_style(Self::init_style());
-        info!("GUI Init [5/8] ... Style");
+        info!("GUI Init [6/9] ... Style");
 
         // Visuals
         cc.egui_ctx.set_visuals(Self::init_visuals());
-        info!("GUI Init [6/8] ... Visuals");
+        info!("GUI Init [7/9] ... Visuals");
 
         // Fonts
         cc.egui_ctx.set_fonts(Self::init_fonts());
-        info!("GUI Init [7/8] ... Fonts");
+        info!("GUI Init [8/9] ... Fonts");
 
         // Done.
-        info!("GUI Init [8/8] ... Init");
+        info!("GUI Init [9/9] ... Init");
         Self {
             // `Kernel` channels.
             to_kernel,

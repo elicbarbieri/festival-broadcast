@@ -17,7 +17,7 @@ use shukusai::{
     state::{AUDIO_STATE, PLAYLISTS},
 };
 use std::sync::Arc;
-
+use shukusai::audio::AudioOutputDevice;
 //---------------------------------------------------------------------------------------------------- GUI `Drop` impl
 // On Windows/Linux, ALT+F4 will trigger `eframe::App::on_close_event()` and cause `Gui`
 // to run its exiting routine, however on macOS, the equivalent Control+Q does not trigger this.
@@ -123,6 +123,16 @@ impl Gui {
                 Err(e)
             }
         }
+    }
+
+    /// Update the audio output device.
+    pub fn set_audio_output_device(&self, device: String) {
+        info!("GUI - Setting audio output device to: {}", &device);
+        let output_device = AudioOutputDevice::from_str(&device);
+        send!(
+            self.to_kernel,
+            FrontendToKernel::SetOutputDevice(output_device)
+        );
     }
 
     /// Set the original [`Settings`] to reflect live [`Settings`].

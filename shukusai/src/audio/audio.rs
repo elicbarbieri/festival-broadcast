@@ -1,7 +1,8 @@
 //---------------------------------------------------------------------------------------------------- Use
 use crate::{
     audio::{
-        output::AudioOutput, Append, AudioToKernel, KernelToAudio, Repeat, Seek, Volume,
+        output::AudioOutput, device::AudioOutputDevice, Append, AudioToKernel,
+        KernelToAudio, Repeat, Seek, Volume,
     },
     collection::{AlbumKey, ArtistKey, Collection, SongKey},
     state::{AudioState, AUDIO_STATE, MEDIA_CONTROLS_RAISE, MEDIA_CONTROLS_SHOULD_EXIT, VOLUME},
@@ -9,7 +10,7 @@ use crate::{
 use anyhow::anyhow;
 use benri::{debug_panic, flip, log::*, sync::*};
 use crossbeam::channel::{Receiver, Sender};
-use log::{debug, error, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::sync::Arc;
 
 use readable::Runtime;
@@ -131,6 +132,7 @@ impl Audio {
     #[inline(always)]
     // Kernel starts `Audio` with this.
     pub(crate) fn init(
+        output_device: AudioOutputDevice,
         collection: Arc<Collection>,
         state: AudioState,
         to_kernel: Sender<AudioToKernel>,
@@ -149,7 +151,7 @@ impl Audio {
         // Loop until we can open the audio output device.
         // Use default SignalSpec.  If decoded audio is at a different sample rate,
         // the audio output device will be re-opened with the correct SignalSpec.
-        let output = match AudioOutput::try_open(None, None, symphonia::core::units::Duration::from(50_u64)) {
+        let output = match AudioOutput::try_open(output_device, None, symphonia::core::units::Duration::from(4_608_u64)) {
             Ok(o) => o,
             Err(e) => {
                 fail!("Audio Init [1/3] ... Cannot create output device");
@@ -201,8 +203,8 @@ impl Audio {
         // The sample rate be set to `96_000` eventually
         // but anything higher than `85_880` will panic.
         match audio_thread_priority::promote_current_thread_to_real_time(
-            0,      // audio buffer frames (0 == default sensible value)
-            85_880, // audio sample rate (assume 96Hz)
+            512,      // audio buffer frames (0 == default sensible value)
+            44_100, // audio sample rate (assume 44.1kHz)
         ) {
             Ok(_) => ok_debug!("Audio Init [3/3] ... realtime priority"),
             Err(_) => fail!("Audio Init [3/3] ... realtime priority"),
@@ -462,6 +464,7 @@ impl Audio {
 
             // Audio State.
             RestoreAudioState => self.restore_audio_state(),
+            SetOutputDevice(device) => self.set_audio_output_device(device),
 
             // Collection.
             DropCollection => self.drop_collection(),
@@ -1352,6 +1355,19 @@ impl Audio {
             #[cfg(feature = "gui")]
             gui_request_update();
         }
+    }
+
+    fn set_audio_output_device(&mut self, device: AudioOutputDevice) {
+        info!("Audio - set_audio_output_device({device:?}");
+        match self.output.change_output_device(device) {
+            Ok(_) => {
+                info!("Audio - Successfully changed audio output device");
+            }
+            Err(e) => {
+                error!("Audio - Couldn't change audio output device: {e:#?}");
+            }
+        }
+
     }
 
     //-------------------------------------------------- Collection.

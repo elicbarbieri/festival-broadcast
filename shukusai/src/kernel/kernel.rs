@@ -23,7 +23,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-
+use crate::audio::AudioOutputDevice;
 #[cfg(feature = "gui")]
 use crate::collection::{UNKNOWN_ALBUM, UNKNOWN_ALBUM_ID};
 #[cfg(feature = "gui")]
@@ -503,7 +503,14 @@ impl Kernel {
         match std::thread::Builder::new()
             .name("Audio".to_string())
             .spawn(move || {
-                Audio::init(collection, audio, audio_send, audio_recv, media_controls);
+                Audio::init(
+                    AudioOutputDevice::default(),
+                    collection,
+                    audio,
+                    audio_send,
+                    audio_recv,
+                    media_controls
+                );
             }) {
             Ok(_) => debug!("Kernel Init [11/13] ... spawned Audio"),
             Err(e) => panic!("Kernel Init [11/13] ... failed to spawn Audio: {e}"),
@@ -615,6 +622,7 @@ impl Kernel {
 
             // Audio State.
             RestoreAudioState => send!(self.to_audio, KernelToAudio::RestoreAudioState),
+            SetOutputDevice(device) => send!(self.to_audio, KernelToAudio::SetOutputDevice(device)),
 
             // Collection.
             NewCollection(paths) => self.ccd_mode(paths),

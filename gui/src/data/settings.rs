@@ -14,8 +14,9 @@ use serde::{Deserialize, Serialize};
 use toml::Table;
 
 use eframe::wgpu::core::resource::BufferMapAsyncStatus::AlreadyMapped;
+use egui::TextBuffer;
 use shukusai::{
-  audio::PREVIOUS_THRESHOLD_DEFAULT,
+  audio::{PREVIOUS_THRESHOLD_DEFAULT, AudioOutputDevice},
   constants::{
     FESTIVAL,
     HEADER,
@@ -89,6 +90,9 @@ pub struct Settings {
   /// Restore playback on re-open.
   pub restore_state: bool,
 
+  /// Output device to use for audio playback.
+  pub output_device: String,
+
   /// Start playback if we added stuff to an empty queue.
   pub empty_autoplay: bool,
 
@@ -120,6 +124,7 @@ impl Settings {
       previous_threshold: PREVIOUS_THRESHOLD_DEFAULT,
       auto_save:          AUTO_SAVE_INTERVAL_SECONDS,
       restore_state:      true,
+      output_device:      AudioOutputDevice::default().human(),
       empty_autoplay:     true,
       accent_color:       ACCENT_COLOR,
       collection_paths:   vec![],
@@ -170,6 +175,7 @@ pub fn read_from_disk(path: Option<PathBuf>) -> Result<Self, disk::Error> {
         "previous_threshold" => settings.previous_threshold = match value.as_integer() {Some(v)=> v as u32, None => PREVIOUS_THRESHOLD_DEFAULT},
         "auto_save" => settings.auto_save = match value.as_integer() {Some(v)=> v as u8, None => AUTO_SAVE_INTERVAL_SECONDS},
         "restore_state" => settings.restore_state = value.as_bool().unwrap_or_else(|| true),
+        "output_device" => settings.output_device = match value.as_str() {Some(v)=> v.to_string(), None => AudioOutputDevice::default().human()},
         "empty_autoplay" => settings.empty_autoplay = value.as_bool().unwrap_or_else(|| true),
         "accent_color" => settings.accent_color = ACCENT_COLOR,  // TODO: Implement color parsing to TOML
         "collection_paths" => settings.collection_paths = vec![], // TODO: Implement collection paths

@@ -9,6 +9,7 @@
 // `https://github.com/pdeljanov/Symphonia/blob/master/symphonia-play/src/output.rs`
 
 //---------------------------------------------------------------------------------------------------- Use
+use crate::audio::device::AudioOutputDevice;
 use crate::audio::Volume;
 use crate::constants::FESTIVAL;
 use crate::state::VOLUME;
@@ -24,11 +25,15 @@ use cpal::{Device, StreamConfig};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rb::{Producer, Consumer, SpscRb, RB, RbInspector, RbProducer, RbConsumer};
 use log::{debug, error, info, trace, warn};
+use serde::{Deserialize, Serialize};
 
 // ----------------------------------------------------------------------------------- Constants
 // If the audio device is not connected, how many seconds
 // should we wait before trying to connect again?
 const RETRY_SECONDS: u64 = 1;
+
+// Size of audio buffer in milliseconds
+const AUDIO_BUF_SIZE: usize = 100;
 
 
 #[derive(Debug)]
@@ -59,83 +64,22 @@ impl AudioOutputError {
     }
 }
 
-pub(crate) struct AudioOutputDevice{  // TODO:  Make things private that can be
-    pub device_name: String,
-    pub is_default: bool,
-    pub volume: Volume
-}
-
-impl AudioOutputDevice {
-    pub fn into_cpal_device(self) -> Result<Device, AudioOutputError> {
-        let host = cpal::default_host();
-        let devices = host.output_devices().map_err(|e| AudioOutputError::InvalidOutputDevice(anyhow!(e)))?;
-
-        let mut matching_devices = devices.into_iter()
-            .filter(|d| d.name().map(|n| n == self.device_name).unwrap_or(false))
-            .collect::<Vec<Device>>();
-
-        if matching_devices.is_empty() {
-            return Err(AudioOutputError::InvalidOutputDevice(
-                anyhow!("No matching device found with name {}", self.device_name))
-            );
-        }
-
-        if matching_devices.len() == 0 {
-            Ok(matching_devices.remove(0))
-        } else {
-            Err(AudioOutputError::InvalidOutputDevice(
-                anyhow!("Multiple devices found with name {}", self.device_name))
-            )
-        }
-    }
-}
-
-
     // SOMEDAY: support i16/u16.
 pub(crate) struct AudioOutput {
     ring_buf: SpscRb<f32>,
     ring_buf_producer: Producer<f32>,
     sample_buf: SampleBuffer<f32>,
+    system_device: Device,
     stream: cpal::Stream,
     // resampler: Option<Resampler<f32>>,
     samples: Vec<f32>,
 
-    pub(crate) device: Device,
+    pub(crate) device: AudioOutputDevice,
     pub(crate) spec: SignalSpec,
     pub(crate) duration: Duration,
 }
 
 impl AudioOutput {
-
-    pub fn can_connect(device: &Device) -> bool {
-        let config = match device.default_output_config() {
-            Ok(config) => config,
-            Err(_) => return false,
-        };
-
-        let stream = device.build_output_stream(
-            &config.config(),
-            |data: &mut [f32], _: &cpal::OutputCallbackInfo| {},
-            |err| warn!("Audio - audio output error: {err}"),
-            Some(core::time::Duration::from_millis(100)),
-        );
-        let connectable = stream.is_ok();
-        drop(stream);
-
-        connectable
-    }
-
-    pub fn available_devices() -> Vec<Device> {
-        let devices = match cpal::default_host().output_devices() {
-            Ok(devices) => devices,
-            Err(err) => {
-                error!("Audio - failed to get output devices: {err}");
-                return Vec::new();
-            }
-        };
-
-        devices.collect()
-    }
 
     fn build_config(device: &Device, signal_spec: &SignalSpec) -> Result<StreamConfig, AudioOutputError> {
 
@@ -167,23 +111,20 @@ impl AudioOutput {
     }
 
     pub fn try_open(
-        device: Option<Device>,
+        device: AudioOutputDevice,
         spec: Option<SignalSpec>,
         duration: Duration,
     ) -> Result<Self, AudioOutputError> {
-        let device = match device {
-            Some(device) => device,
-            None => {
-                match cpal::default_host().default_output_device() {
-                    Some(device) => device,
-                    None => return Err(
-                        AudioOutputError::OpenStream(anyhow!("no default audio output device"))
-                    )
-                }
+        let device_name = device.human();
+        let system_device = match device.get_cpal_device() {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Audio - failed to get output device '{device_name}'");
+                return Err(AudioOutputError::InvalidOutputDevice(
+                    anyhow!("Cannot connect to audio output device"))
+                );
             }
         };
-
-        let device_name = device.name().unwrap_or_else(|_| "Un-Named Device".to_string());
 
         let spec = spec.unwrap_or_else(|| SignalSpec {
             rate: 44_100,
@@ -192,19 +133,19 @@ impl AudioOutput {
 
         let num_channels = spec.channels.count();
 
-        // Create a ring buffer with a capacity for up-to 50ms of audio.
-        let ring_len = ((50 * spec.rate as usize) / 1000) * num_channels;
+        // Create a ring buffer with a capacity for up-to AUDIO_BUF_SIZE of audio.
+        let ring_len = ((AUDIO_BUF_SIZE * spec.rate as usize) / 1000) * num_channels;
         let ring_buf = SpscRb::new(ring_len);
         let ring_buf_producer = ring_buf.producer();
 
-        let config = Self::build_config(&device, &spec)?;
+        let config = Self::build_config(&system_device, &spec)?;
 
         let mut tries = 0_usize;
 
         let stream = loop {
             let ring_buf_consumer = ring_buf.consumer();
 
-            let stream_result = device.build_output_stream(
+            let stream_result = system_device.build_output_stream(
                 &config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     // Write out as many samples as possible from the ring buffer to the audio output.
@@ -219,7 +160,7 @@ impl AudioOutput {
 
             match stream_result {
                 Ok(s) => {
-                    debug!("Audio Init [1/3] ... connected to {} @ {}Hz", device_name, spec.rate);
+                    debug!("Audio Init [1/3] ... connected to {} @{} Hz", device_name, spec.rate);
                     break s;
                 }
                 Err(e) => {
@@ -270,29 +211,62 @@ impl AudioOutput {
         // };
 
         let samples = Vec::with_capacity(num_channels * duration as usize);
-
         Ok(Self {
-            device,
             ring_buf,
             ring_buf_producer,
             sample_buf,
-            samples,
+            system_device,
             stream,
-            // resampler,
+            samples,
+
+            device,
             spec,
             duration,
         })
     }
 
+    /// Change output device.  This will close the current stream and open a new one with the
+    /// specified device.
+    pub fn change_output_device(
+        &mut self,
+        device: AudioOutputDevice
+    ) -> Result<(), AudioOutputError> {
+        let device_name = device.human();
+        let system_device = match device.get_cpal_device() {
+            Ok(d) => d,
+            Err(e) => {
+                error!("Audio - failed to get output device '{device_name}'");
+                return Err(AudioOutputError::InvalidOutputDevice(
+                    anyhow!("Cannot connect to audio output device"))
+                );
+            }
+        };
+
+        self.flush();
+
+        self.device = device;
+        self.system_device = system_device;
+
+        let spec = &self.spec.clone();
+        let duration = &self.duration.clone();
+
+        self.reopen_stream(spec, duration)?;
+
+        Ok(())
+    }
+
     pub fn reopen_stream(&mut self, signal_spec: &SignalSpec, duration: &Duration) -> Result<(), AudioOutputError> {
-        let config = Self::build_config(&self.device, signal_spec).unwrap();
+        info!("Audio - reopening stream with spec {signal_spec:?} & {duration:?} frame audio buffer");
+        self.flush();
+
+        let config = Self::build_config(&self.system_device, signal_spec).unwrap();
 
         let num_channels = signal_spec.channels.count();
-        let ring_len = ((50 * signal_spec.rate as usize) / 1000) * num_channels;
+        let ring_len = ((AUDIO_BUF_SIZE * signal_spec.rate as usize) / 1000) * num_channels;
         let ring_buf = SpscRb::new(ring_len);
         let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
 
-        let stream_result = self.device.build_output_stream(
+        let stream_result = self.system_device.build_output_stream(
             &config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 // Write out as many samples as possible from the ring buffer to the audio output.
@@ -319,6 +293,8 @@ impl AudioOutput {
         self.stream = stream;
         self.sample_buf = SampleBuffer::<f32>::new(*duration, *signal_spec);
         self.samples = Vec::with_capacity(num_channels * *duration as usize);
+        self.duration = Duration::from(*duration);
+        self.spec = signal_spec.clone();
 
         Ok(())
     }
@@ -394,7 +370,8 @@ impl AudioOutput {
         // after production, so there are no "old" samples
         // left in `self.resampler`, all of them are in
         // the ring_buffer, so just wait until it is empty.
-        // Maximum wait time is 50ms.
+        // Maximum wait time is AUDIO_BUF_SIZE_MILLISECONDS.
+        self.ring_buf.clear();
         while !self.ring_buf.is_empty() {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }

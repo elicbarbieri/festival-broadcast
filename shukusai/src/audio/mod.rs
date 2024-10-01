@@ -17,6 +17,9 @@ pub use seek::*;
 
 // Symphonia-related.
 pub(super) mod output;
+
+pub(crate) mod device;
+pub use device::AudioOutputDevice;
 #[cfg(not(target_os = "linux"))]
 pub(super) mod resampler;
 
